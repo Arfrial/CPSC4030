@@ -1,0 +1,185 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CellScope | Cell Behavior Explorer</title>
+
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="script.js" defer></script>
+</head>
+
+<body>
+
+    <header>
+        <div class="branding">
+            <h1>Cell<span>Scope</span></h1>
+            <p>Interactive Cell Behavior Explorer</p>
+        </div>
+
+        <div class="course-label">
+            Clemson University | CPSC 4030
+        </div>
+    </header>
+
+    <main>
+
+        <section class="intro">
+            <h2>Cell Movement Analysis</h2>
+            <p>
+                Explore cell movement across different cell lines,
+                compare movement patterns over time, and investigate
+                individual cell tracks using ground truth annotations.
+            </p>
+        </section>
+
+        <!-- Dashboard filters -->
+        <section class="filters">
+
+            <div class="filter-group">
+                <label for="cell-line">Cell Line</label>
+                <select id="cell-line">
+                    <option value="all">All Cell Lines</option>
+                    <option value="HEK293T">HEK293T</option>
+                    <option value="MCF10A">MCF10A</option>
+                    <option value="MDA-MB-231">MDA-MB-231</option>
+                    <option value="U87">U87</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="field">Field of View</label>
+                <select id="field">
+                    <option value="all">All Fields</option>
+                </select>
+            </div>
+
+            <button id="reset-filters">Reset Filters</button>
+
+        </section>
+
+        <!-- Summary statistics -->
+        <section class="statistics">
+
+            <div class="stat-card">
+                <p>Cell Observations</p>
+                <h2 id="total-observations">229,890</h2>
+            </div>
+
+            <div class="stat-card">
+                <p>Cell Tracks</p>
+                <h2 id="total-tracks">3,230</h2>
+            </div>
+
+            <div class="stat-card">
+                <p>Cell Lines</p>
+                <h2 id="total-cell-lines">4</h2>
+            </div>
+
+            <div class="stat-card">
+                <p>Fields of View</p>
+                <h2 id="total-fields">25</h2>
+            </div>
+
+        </section>
+
+        <!-- Shared color legend -->
+        <section class="legend">
+            <div><span class="dot hek"></span>HEK293T</div>
+            <div><span class="dot mcf"></span>MCF10A</div>
+            <div><span class="dot mda"></span>MDA-MB-231</div>
+            <div><span class="dot u87"></span>U87</div>
+        </section>
+
+        <!-- Dashboard visualizations -->
+        <section class="dashboard">
+
+            <article class="panel">
+                <h3>Movement by Cell Line</h3>
+                <p>Compare overall mean step displacement. Select a bar to filter the dashboard.</p>
+
+                <div id="bar-chart" class="chart">
+                    <span class="placeholder">Bar chart</span>
+                </div>
+            </article>
+
+            <article class="panel">
+                <h3>Movement Over Time</h3>
+                <p>Explore average displacement across recorded frames.</p>
+
+                <div id="line-chart" class="chart">
+                    <span class="placeholder">Line chart</span>
+                </div>
+            </article>
+
+            <article class="panel full-width">
+                <div class="panel-heading">
+                    <div>
+                        <h3>Individual Track Explorer</h3>
+                        <p>
+                            Compare track duration and mean displacement
+                            to identify unusual movement patterns.
+                        </p>
+                    </div>
+
+                    <div class="chart-controls">
+                        <button id="scatter-mode" class="active">
+                            Scatter
+                        </button>
+                        <button id="density-mode">
+                            Density
+                        </button>
+                    </div>
+                </div>
+
+                <div id="scatter-chart" class="chart large-chart">
+                    <span class="placeholder">Track scatterplot</span>
+                </div>
+            </article>
+
+            <article class="panel">
+                <h3>Movement Distribution</h3>
+                <p>Explore the distribution of mean track displacement.</p>
+
+                <div id="histogram-chart" class="chart">
+                    <span class="placeholder">Histogram</span>
+                </div>
+            </article>
+
+            <article class="panel">
+                <h3>Selected Cell Trajectory</h3>
+                <p>Inspect the spatial movement of an individual track.</p>
+
+                <div id="trajectory-chart" class="chart">
+                    <span class="placeholder">
+                        Select a track to explore its trajectory.
+                    </span>
+                </div>
+
+                <div id="track-details"></div>
+            </article>
+
+        </section>
+
+        <section class="data-note">
+            <h3>About the Data</h3>
+            <p>
+                This dashboard uses ground truth annotations from
+                25 fields across four cell lines. Displacement is
+                measured in pixels per observed step. Missing movement
+                values are excluded from displacement calculations.
+            </p>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>CellScope | CPSC 4030 Data Visualization Project | 2026</p>
+    </footer>
+
+    <div id="tooltip" role="tooltip"></div>
+
+</body>
+</html>
