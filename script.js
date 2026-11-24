@@ -306,13 +306,245 @@ function selectCellLine(line) {
     updateDashboard();
 }
 
+
+// Movement over time line chart
+
+function drawLineChart() {
+    const container = d3.select("#line-chart");
+    container.selectAll("*").remove();
+
+    const filtered = frameData.filter(d =>
+        (selectedCellLine === "all" ||
+            d.cell_line === selectedCellLine) &&
+        (selectedField === "all" ||
+            d.field_key === selectedField) &&
+        d.valid_steps > 0 &&
+        Number.isFinite(d.mean_displacement)
+    );
+
+    if (filtered.length === 0) {
+        container.append("span")
+            .attr("class", "placeholder")
+            .text("No movement data available.");
+        return;
+    }
+
+    // Calculate field-balanced averages for each frame
+
+    const grouped = d3.rollups(
+        filtered,
+        values => ({
+            mean: d3.mean(values, d => d.mean_displacement),
+            fields: values.length
+        }),
+        d => d.cell_line,
+        d => d.frame
+    );
+
+    const minFrame = d3.min(filtered, d => d.frame);
+    const maxFrame = d3.max(filtered, d => d.frame);
+
+    const series = grouped.map(([line, frames]) => {
+        const frameMap = new Map(frames);
+
+        return {
+            cell_line: line,
+            values: d3.range(minFrame, maxFrame + 1)
+                .map(frame => ({
+                    frame: frame,
+                    mean: frameMap.get(frame)?.mean ?? null,
+                    fields: frameMap.get(frame)?.fields ?? 0
+                }))
+        };
+    });
+
+    const width = 640;
+    const height = 320;
+
+    const margin = {
+        top: 25,
+        right: 20,
+        bottom: 50,
+        left: 65
+    };
+
+    const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${width} ${height}`)
+        .attr("width", "100%")
+        .attr("role", "img")
+        .attr("aria-label", "Cell movement over time");
+
+    // Scales
+
+    const x = d3.scaleLinear()
+        .domain([minFrame, Math.max(minFrame + 1, maxFrame)])
+        .range([margin.left, width - margin.right]);
+
+    const maximum = d3.max(
+        series.flatMap(d => d.values),
+        d => d.mean
+    );
+
+    const y = d3.scaleLinear()
+        .domain([0, Math.max(1, maximum * 1.1)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+    // Horizontal grid lines
+
+    svg.append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(
+            d3.axisLeft(y)
+                .ticks(6)
+                .tickSize(-(width - margin.left - margin.right))
+                .tickFormat("")
+        );
+
+    // X axis
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform",
+            `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).ticks(8).tickFormat(d3.format("d")));
+
+    // Y axis
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).ticks(6));
+
+    // X axis label
+
+    svg.append("text")
+        .attr("x", (margin.left + width - margin.right) / 2)
+        .attr("y", height - 10)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#94a3b8")
+        .attr("font-size", 12)
+        .text("Frame");
+
+    // Y axis label
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", 15)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#94a3b8")
+        .attr("font-size", 12)
+        .text("Mean step displacement (px)");
+
+    // Line generator
+
+    const lineGenerator = d3.line()
+        .defined(d => Number.isFinite(d.mean))
+        .x(d => x(d.frame))
+        .y(d => y(d.mean));
+
+    // Draw each cell line
+
+    svg.selectAll(".movement-line")
+        .data(series)
+        .join("path")
+        .attr("class", "movement-line")
+        .attr("fill", "none")
+        .attr("stroke", d => colors[d.cell_line])
+        .attr("stroke-width", 1.8)
+        .attr("stroke-linejoin", "round")
+        .attr("d", d => lineGenerator(d.values));
+
+    // Vertical hover indicator
+
+    const hoverLine = svg.append("line")
+        .attr("y1", margin.top)
+        .attr("y2", height - margin.bottom)
+        .attr("stroke", "#cbd5e1")
+        .attr("stroke-dasharray", "4 4")
+        .style("visibility", "hidden");
+
+    const hoverPoints = svg.append("g");
+
+    // Interactive hover area
+
+    svg.append("rect")
+        .attr("x", margin.left)
+        .attr("y", margin.top)
+        .attr("width", width - margin.left - margin.right)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("fill", "transparent")
+        .style("cursor", "crosshair")
+
+        .on("mousemove", function(event) {
+            const [mouseX] = d3.pointer(event, svg.node());
+
+            const frame = Math.max(
+                minFrame,
+                Math.min(maxFrame, Math.round(x.invert(mouseX)))
+            );
+
+            hoverLine
+                .attr("x1", x(frame))
+                .attr("x2", x(frame))
+                .style("visibility", "visible");
+
+            const currentValues = series.map(d => ({
+                cell_line: d.cell_line,
+                ...d.values[frame - minFrame]
+            })).filter(d => Number.isFinite(d.mean));
+
+            hoverPoints.selectAll("circle")
+                .data(currentValues)
+                .join("circle")
+                .attr("cx", x(frame))
+                .attr("cy", d => y(d.mean))
+                .attr("r", 4)
+                .attr("fill", d => colors[d.cell_line])
+                .attr("stroke", "#ffffff")
+                .attr("stroke-width", 1);
+
+            let content = `<strong>Frame ${frame}</strong><br>`;
+
+            currentValues.forEach(d => {
+                content += `
+                    <span style="color:${colors[d.cell_line]}">
+                        ${d.cell_line}
+                    </span>:
+                    ${d.mean.toFixed(2)} px
+                    (${d.fields} fields)<br>
+                `;
+            });
+
+            if (currentValues.length === 0) {
+                content += "No valid movement data";
+            }
+
+            tooltip
+                .style("visibility", "visible")
+                .style("left", `${event.pageX + 15}px`)
+                .style("top", `${event.pageY + 15}px`)
+                .html(content);
+        })
+
+        .on("mouseleave", function() {
+            hoverLine.style("visibility", "hidden");
+            hoverPoints.selectAll("circle").remove();
+            tooltip.style("visibility", "hidden");
+        });
+}
+
+
 // Refresh dashboard
 
 function updateDashboard() {
+    tooltip.style("visibility", "hidden");
+
     updateStatistics();
     drawBarChart();
-
-    // Additional charts will be added here.
+    drawLineChart();
 }
 
 // Cell line dropdown
