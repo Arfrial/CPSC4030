@@ -412,3 +412,19 @@ footer {
     font-size: 15px;
     margin-bottom: 6px;
 }
+
+/* Histogram */
+
+.histogram-status {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 10px;
+}
+
+.histogram-context {
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    margin-top: 4px;
+}

@@ -558,6 +558,7 @@ function getFilteredTracks() {
 // Individual track scatterplot
 
 function drawScatterChart() {
+
     const container = d3.select("#scatter-chart");
 
     container.selectAll("*").remove();
@@ -767,6 +768,7 @@ function drawScatterChart() {
 
             if (event.type === "end") {
                 brushing = false;
+                drawHistogram();
             }
         });
 
@@ -882,6 +884,263 @@ function showTrackDetails(track) {
 }
 
 
+// Movement distribution histogram
+
+function drawHistogram() {
+    const container = d3.select("#histogram-chart");
+
+    container.selectAll("*").remove();
+    container.style("flex-direction", "column");
+
+    const allFilteredTracks = getFilteredTracks();
+
+    const data = allFilteredTracks.filter(d =>
+        selectedTrackKeys === null ||
+        selectedTrackKeys.has(d.track_key)
+    );
+
+    if (allFilteredTracks.length === 0) {
+        container.append("span")
+            .attr("class", "placeholder")
+            .text("No movement data available.");
+        return;
+    }
+
+    const width = 640;
+    const height = 320;
+
+    const margin = {
+        top: 25,
+        right: 20,
+        bottom: 50,
+        left: 65
+    };
+
+    const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${width} ${height}`)
+        .attr("width", "100%")
+        .attr("role", "img")
+        .attr("aria-label", "Distribution of mean track displacement");
+
+    // Keep displacement scale consistent across filters
+
+    const x = d3.scaleLinear()
+        .domain([
+            0,
+            d3.max(tracks, d => d.mean_displacement)
+        ])
+        .nice()
+        .range([margin.left, width - margin.right]);
+
+    // Create histogram bins
+
+    const binGenerator = d3.bin()
+        .value(d => d.mean_displacement)
+        .domain(x.domain())
+        .thresholds(x.ticks(25));
+
+    const allBins = binGenerator(allFilteredTracks);
+    const selectedBins = binGenerator(data);
+
+    // Count tracks from each cell line in every bin
+
+    const histogramData = selectedBins.map(bin => {
+        const result = {
+            x0: bin.x0,
+            x1: bin.x1,
+            total: bin.length
+        };
+
+        cellLines.forEach(line => {
+            result[line] = bin.filter(
+                d => d.cell_line === line
+            ).length;
+        });
+
+        return result;
+    });
+
+    // Stack counts by cell line
+
+    const stackedData = d3.stack()
+        .keys(cellLines)(histogramData);
+
+    const y = d3.scaleLinear()
+        .domain([
+            0,
+            Math.max(1, d3.max(allBins, d => d.length))
+        ])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+    // Horizontal grid lines
+
+    svg.append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(
+            d3.axisLeft(y)
+                .ticks(6)
+                .tickSize(
+                    -(width - margin.left - margin.right)
+                )
+                .tickFormat("")
+        );
+
+    // X axis
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform",
+            `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).ticks(8));
+
+    // Y axis
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(
+            d3.axisLeft(y)
+                .ticks(6)
+                .tickFormat(d3.format("d"))
+        );
+
+    // X axis label
+
+    svg.append("text")
+        .attr("x", (margin.left + width - margin.right) / 2)
+        .attr("y", height - 10)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#94a3b8")
+        .attr("font-size", 12)
+        .text("Mean step displacement (px)");
+
+    // Y axis label
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", 15)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#94a3b8")
+        .attr("font-size", 12)
+        .text("Number of tracks");
+
+    // Show the original distribution behind a brush selection
+
+    if (selectedTrackKeys !== null) {
+        svg.append("g")
+            .selectAll("rect")
+            .data(allBins)
+            .join("rect")
+            .attr("x", d => x(d.x0) + 1)
+            .attr("y", d => y(d.length))
+            .attr("width", d =>
+                Math.max(0, x(d.x1) - x(d.x0) - 2)
+            )
+            .attr("height", d => y(0) - y(d.length))
+            .attr("fill", "#64748b")
+            .attr("opacity", 0.25);
+    }
+
+    // Draw stacked histogram bars
+
+    svg.append("g")
+        .selectAll("g")
+        .data(stackedData)
+        .join("g")
+        .attr("fill", d => colors[d.key])
+
+        .selectAll("rect")
+        .data(d => d)
+        .join("rect")
+        .attr("x", d => x(d.data.x0) + 1)
+        .attr("y", d => y(d[1]))
+        .attr("width", d =>
+            Math.max(
+                0,
+                x(d.data.x1) - x(d.data.x0) - 2
+            )
+        )
+        .attr("height", d => y(d[0]) - y(d[1]))
+        .attr("opacity", 0.9);
+
+    // Invisible hover regions for each histogram bin
+
+    svg.append("g")
+        .selectAll("rect")
+        .data(histogramData)
+        .join("rect")
+        .attr("x", d => x(d.x0))
+        .attr("y", margin.top)
+        .attr("width", d => x(d.x1) - x(d.x0))
+        .attr("height",
+            height - margin.top - margin.bottom)
+        .attr("fill", "transparent")
+        .style("cursor", "crosshair")
+
+        .on("mouseenter", function(event, d) {
+            d3.select(this)
+                .attr("fill", "#ffffff")
+                .attr("fill-opacity", 0.06);
+
+            let content = `
+                <strong>
+                    ${d.x0.toFixed(1)}–${d.x1.toFixed(1)} px
+                </strong><br>
+                Total tracks: ${d.total.toLocaleString()}<br>
+            `;
+
+            cellLines.forEach(line => {
+                content += `
+                    <span style="color:${colors[line]}">
+                        ${line}
+                    </span>:
+                    ${d[line].toLocaleString()}<br>
+                `;
+            });
+
+            tooltip
+                .style("visibility", "visible")
+                .html(content);
+        })
+
+        .on("mousemove", function(event) {
+            tooltip
+                .style("left", `${event.pageX + 15}px`)
+                .style("top", `${event.pageY + 15}px`);
+        })
+
+        .on("mouseleave", function() {
+            d3.select(this)
+                .attr("fill", "transparent");
+
+            tooltip.style("visibility", "hidden");
+        });
+
+    // Display histogram selection status
+
+    const status = container.append("div")
+        .attr("class", "histogram-status");
+
+    if (selectedTrackKeys !== null) {
+        status.text(
+            `${data.length.toLocaleString()} of ` +
+            `${allFilteredTracks.length.toLocaleString()} ` +
+            `tracks selected`
+        );
+
+        container.append("div")
+            .attr("class", "histogram-context")
+            .text("Gray bars show the original distribution.");
+    } else {
+        status.text(
+            `${data.length.toLocaleString()} tracks displayed`
+        );
+    }
+}
+
 // Refresh dashboard
 
 function updateDashboard() {
@@ -891,6 +1150,7 @@ function updateDashboard() {
     drawBarChart();
     drawLineChart();
     drawScatterChart();
+    drawHistogram();
 }
 
 // Cell line dropdown
