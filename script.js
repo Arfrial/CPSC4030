@@ -537,6 +537,351 @@ function drawLineChart() {
 }
 
 
+// Track selection state
+
+let selectedTrack = null;
+let selectedTrackKeys = null;
+
+// Return tracks matching the current filters
+
+function getFilteredTracks() {
+    return tracks.filter(d =>
+        (selectedCellLine === "all" ||
+            d.cell_line === selectedCellLine) &&
+        (selectedField === "all" ||
+            d.field_key === selectedField) &&
+        Number.isFinite(d.mean_displacement) &&
+        d.valid_steps > 0
+    );
+}
+
+// Individual track scatterplot
+
+function drawScatterChart() {
+    const container = d3.select("#scatter-chart");
+
+    container.selectAll("*").remove();
+    container.style("flex-direction", "column");
+
+    selectedTrack = null;
+    selectedTrackKeys = null;
+
+    d3.select("#track-details").html("");
+
+    const data = getFilteredTracks();
+
+    if (data.length === 0) {
+        container.append("span")
+            .attr("class", "placeholder")
+            .text("No tracks available.");
+        return;
+    }
+
+    const width = 1100;
+    const height = 420;
+
+    const margin = {
+        top: 20,
+        right: 30,
+        bottom: 55,
+        left: 70
+    };
+
+    const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${width} ${height}`)
+        .attr("width", "100%")
+        .attr("role", "group")
+        .attr("aria-label", "Interactive cell track scatterplot");
+
+    // Keep consistent scales across filters
+
+    const x = d3.scaleLinear()
+        .domain([0, d3.max(tracks, d => d.duration)])
+        .nice()
+        .range([margin.left, width - margin.right]);
+
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(tracks, d => d.mean_displacement)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+    // Horizontal grid lines
+
+    svg.append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(
+            d3.axisLeft(y)
+                .ticks(7)
+                .tickSize(-(width - margin.left - margin.right))
+                .tickFormat("")
+        );
+
+    // Vertical grid lines
+
+    svg.append("g")
+        .attr("class", "grid")
+        .attr("transform",
+            `translate(0,${height - margin.bottom})`)
+        .call(
+            d3.axisBottom(x)
+                .ticks(10)
+                .tickSize(-(height - margin.top - margin.bottom))
+                .tickFormat("")
+        );
+
+    // X axis
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform",
+            `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).ticks(10));
+
+    // Y axis
+
+    svg.append("g")
+        .attr("class", "axis")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).ticks(7));
+
+    // X axis label
+
+    svg.append("text")
+        .attr("x", (margin.left + width - margin.right) / 2)
+        .attr("y", height - 12)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#94a3b8")
+        .attr("font-size", 13)
+        .text("Track duration (frames)");
+
+    // Y axis label
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", 18)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#94a3b8")
+        .attr("font-size", 13)
+        .text("Mean step displacement (px)");
+
+    // Draw individual tracks
+
+    const points = svg.append("g")
+        .selectAll("circle")
+        .data(data, d => d.track_key)
+        .join("circle")
+        .attr("cx", d => x(d.duration))
+        .attr("cy", d => y(d.mean_displacement))
+        .attr("r", 3.5)
+        .attr("fill", d => colors[d.cell_line])
+        .attr("opacity", 0.45)
+        .attr("pointer-events", "none");
+
+    // Spatial index for efficient nearest-point lookup
+
+    const pointIndex = d3.quadtree()
+        .x(d => x(d.duration))
+        .y(d => y(d.mean_displacement))
+        .addAll(data);
+
+    // Display selection status
+
+    const status = container.append("div")
+        .attr("class", "scatter-status")
+        .text(`${data.length.toLocaleString()} tracks displayed`);
+
+    // Highlight selected tracks
+
+    function updatePointStyles() {
+        points
+            .attr("opacity", d => {
+                if (selectedTrack?.track_key === d.track_key) {
+                    return 1;
+                }
+
+                if (selectedTrackKeys === null) {
+                    return 0.45;
+                }
+
+                return selectedTrackKeys.has(d.track_key)
+                    ? 0.95 : 0.07;
+            })
+            .attr("r", d =>
+                selectedTrack?.track_key === d.track_key
+                    ? 6 : 3.5
+            )
+            .attr("stroke", d =>
+                selectedTrack?.track_key === d.track_key
+                    ? "#ffffff" : "none"
+            )
+            .attr("stroke-width", 2);
+    }
+
+    // Rectangular brush selection
+
+    let brushing = false;
+
+    const brush = d3.brush()
+        .extent([
+            [margin.left, margin.top],
+            [width - margin.right, height - margin.bottom]
+        ])
+
+        .on("start", function() {
+            brushing = true;
+            tooltip.style("visibility", "hidden");
+        })
+
+        .on("brush end", function(event) {
+            const selection = event.selection;
+
+            if (selection) {
+                const [[x0, y0], [x1, y1]] = selection;
+
+                const matching = data.filter(d =>
+                    x(d.duration) >= x0 &&
+                    x(d.duration) <= x1 &&
+                    y(d.mean_displacement) >= y0 &&
+                    y(d.mean_displacement) <= y1
+                );
+
+                selectedTrackKeys = new Set(
+                    matching.map(d => d.track_key)
+                );
+
+                status.text(
+                    `${matching.length.toLocaleString()} of ` +
+                    `${data.length.toLocaleString()} tracks selected`
+                );
+            } else {
+                selectedTrackKeys = null;
+
+                status.text(
+                    `${data.length.toLocaleString()} tracks displayed`
+                );
+            }
+
+            updatePointStyles();
+
+            if (event.type === "end") {
+                brushing = false;
+            }
+        });
+
+    const brushGroup = svg.append("g")
+        .attr("class", "track-brush")
+        .call(brush);
+
+    brushGroup.select(".selection")
+        .attr("fill", "#38bdf8")
+        .attr("fill-opacity", 0.12)
+        .attr("stroke", "#38bdf8")
+        .attr("stroke-width", 1.5);
+
+    // Hover indicator
+
+    const hoverPoint = svg.append("circle")
+        .attr("r", 6)
+        .attr("fill", "none")
+        .attr("stroke", "#ffffff")
+        .attr("stroke-width", 1.5)
+        .attr("pointer-events", "none")
+        .style("visibility", "hidden");
+
+    // Hover over the nearest track
+
+    svg.on("mousemove", function(event) {
+        if (brushing) {
+            hoverPoint.style("visibility", "hidden");
+            return;
+        }
+
+        const [mx, my] = d3.pointer(event, svg.node());
+
+        const nearest = pointIndex.find(mx, my, 12);
+
+        if (!nearest) {
+            tooltip.style("visibility", "hidden");
+            hoverPoint.style("visibility", "hidden");
+            return;
+        }
+
+        hoverPoint
+            .attr("cx", x(nearest.duration))
+            .attr("cy", y(nearest.mean_displacement))
+            .style("visibility", "visible");
+
+        tooltip
+            .style("visibility", "visible")
+            .style("left", `${event.pageX + 15}px`)
+            .style("top", `${event.pageY + 15}px`)
+            .html(`
+                <strong style="color:${colors[nearest.cell_line]}">
+                    ${nearest.cell_line}
+                </strong><br>
+                Field: ${nearest.field}<br>
+                Track ID: ${nearest.track_id}<br>
+                Start frame: ${nearest.start_frame}<br>
+                End frame: ${nearest.end_frame}<br>
+                Duration: ${nearest.duration} frames<br>
+                Mean displacement:
+                    ${nearest.mean_displacement.toFixed(2)} px<br>
+                Divisions: ${nearest.divisions}<br>
+                <em>Click to inspect track</em>
+            `);
+    });
+
+    svg.on("mouseleave", function() {
+        tooltip.style("visibility", "hidden");
+        hoverPoint.style("visibility", "hidden");
+    });
+
+    // Select an individual track
+
+    svg.on("click", function(event) {
+        const [mx, my] = d3.pointer(event, svg.node());
+
+        const nearest = pointIndex.find(mx, my, 12);
+
+        if (!nearest) return;
+
+        selectedTrack = nearest;
+
+        updatePointStyles();
+        showTrackDetails(nearest);
+    });
+}
+
+// Display selected track information
+
+function showTrackDetails(track) {
+    d3.select("#track-details")
+        .html(`
+            <div class="track-info">
+                <strong style="color:${colors[track.cell_line]}">
+                    ${track.cell_line} — Track ${track.track_id}
+                </strong>
+
+                <div>Field: ${track.field}</div>
+                <div>
+                    Frames: ${track.start_frame}–${track.end_frame}
+                </div>
+                <div>Duration: ${track.duration} frames</div>
+                <div>
+                    Observations: ${track.observations}
+                </div>
+                <div>
+                    Mean displacement:
+                    ${track.mean_displacement.toFixed(2)} px
+                </div>
+                <div>Divisions: ${track.divisions}</div>
+            </div>
+        `);
+}
+
+
 // Refresh dashboard
 
 function updateDashboard() {
@@ -545,6 +890,7 @@ function updateDashboard() {
     updateStatistics();
     drawBarChart();
     drawLineChart();
+    drawScatterChart();
 }
 
 // Cell line dropdown

@@ -384,3 +384,31 @@ footer {
         padding: 15px;
     }
 }
+
+/* Scatterplot selection */
+
+.scatter-status {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 10px;
+}
+
+.track-brush .overlay {
+    cursor: crosshair;
+}
+
+.track-info {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 15px;
+    line-height: 1.9;
+}
+
+.track-info strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 6px;
+}
