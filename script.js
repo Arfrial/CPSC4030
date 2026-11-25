@@ -1064,6 +1064,40 @@ function drawHistogram() {
         .attr("height", d => y(d[0]) - y(d[1]))
         .attr("opacity", 0.9);
 
+        // Highlight small histogram selections
+
+    if (selectedTrackKeys !== null) {
+        const smallBins = histogramData.filter(d =>
+            d.total > 0 &&
+            y(0) - y(d.total) < 10
+        );
+
+        svg.append("g")
+            .attr("pointer-events", "none")
+            .selectAll("circle")
+            .data(smallBins)
+            .join("circle")
+            .attr("cx", d => x((d.x0 + d.x1) / 2))
+            .attr("cy", d => y(d.total))
+            .attr("r", 3.5)
+            .attr("fill", "#fbbf24")
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 1);
+
+        svg.append("g")
+            .attr("pointer-events", "none")
+            .selectAll("text")
+            .data(smallBins)
+            .join("text")
+            .attr("x", d => x((d.x0 + d.x1) / 2))
+            .attr("y", d => y(d.total) - 9)
+            .attr("text-anchor", "middle")
+            .attr("fill", "#fbbf24")
+            .attr("font-size", 12)
+            .attr("font-weight", "bold")
+            .text(d => d.total);
+    }
+
     // Invisible hover regions for each histogram bin
 
     svg.append("g")
@@ -1147,7 +1181,7 @@ function updateDashboard() {
     updateStatistics();
     drawBarChart();
     drawLineChart();
-    drawScatterChart();
+    drawTrackExplorer();
     drawHistogram();
     drawFieldExplorer();
 }

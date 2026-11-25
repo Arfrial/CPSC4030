@@ -507,3 +507,38 @@ footer {
     height: 9px;
     border-radius: 50%;
 }
+
+/* Density visualization */
+
+.density-legend {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.density-scale {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.density-gradient {
+    display: inline-block;
+    width: 180px;
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(
+        to right,
+        #315f85,
+        #facc15
+    );
+}
+
+#scatter-chart path[role="button"]:focus-visible {
+    outline: none;
+    stroke: white;
+    stroke-width: 2px;
+}
