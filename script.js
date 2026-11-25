@@ -43,10 +43,7 @@ async function loadData() {
         updateDashboard();
 
     } catch (error) {
-        console.error("Error loading dataset:", error);
-
-        d3.select("#bar-chart")
-            .text("Unable to load dataset. Check the console.");
+        console.error("Error initializing dashboard:", error);
     }
 }
 
@@ -881,6 +878,7 @@ function showTrackDetails(track) {
                 <div>Divisions: ${track.divisions}</div>
             </div>
         `);
+    drawFieldExplorer(track);
 }
 
 
@@ -1151,6 +1149,7 @@ function updateDashboard() {
     drawLineChart();
     drawScatterChart();
     drawHistogram();
+    drawFieldExplorer();
 }
 
 // Cell line dropdown

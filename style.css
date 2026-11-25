@@ -428,3 +428,82 @@ footer {
     text-align: center;
     margin-top: 4px;
 }
+
+
+/* Field of View Explorer */
+
+#trajectory-chart {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 12px;
+}
+
+#trajectory-chart > .placeholder {
+    margin: auto;
+    padding: 30px;
+}
+
+.field-explorer-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+}
+
+.field-explorer-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.field-explorer-controls button {
+    min-width: 75px;
+}
+
+.field-explorer-controls input[type="range"] {
+    flex: 1;
+    min-width: 80px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.field-frame-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.field-explorer-status {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.field-explorer-legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.field-explorer-legend > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.field-legend-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
